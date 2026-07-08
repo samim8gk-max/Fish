@@ -1,0 +1,2472 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fish Trading Management App</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                        },
+                        secondary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Firebase SDK Compat versions -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+    <style>
+        /* Table solid black border specifications */
+        .solid-table, .solid-table th, .solid-table td {
+            border: 1px solid #000000 !important;
+        }
+        .dark .solid-table, .dark .solid-table th, .dark .solid-table td {
+            border: 1px solid #ffffff !important; /* White lines for dark mode readability */
+        }
+
+        /* High-visibility Input fields design override */
+        .modal-input {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 700; /* highly bold text */
+            color: #000000 !important; /* solid black text */
+            background-color: #ffffff !important; /* clean white bg */
+            border: 2px solid #000000 !important; /* strong black border */
+            border-radius: 0.5rem; /* rounded-lg */
+            outline: none;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        .modal-input:focus {
+            border-color: #22c55e !important;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3); /* green outline halo */
+        }
+        .modal-input::placeholder {
+            color: #4b5563 !important; /* clear dark gray placeholder */
+            opacity: 1;
+        }
+        /* Style adjustments for select elements to render clear text in all OS */
+        .modal-input select, .modal-input option {
+            color: #000000 !important;
+            font-weight: 700;
+        }
+
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printArea, #printArea * {
+                visibility: visible;
+            }
+            #printArea {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-xl flex flex-col items-center gap-3 shadow-xl">
+            <div class="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent"></div>
+            <span class="text-sm font-semibold">Syncing with Firebase...</span>
+        </div>
+    </div>
+
+    <!-- FULL SCREEN IMAGE ZOOM MODAL -->
+    <div id="imageViewerModal" class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none" onclick="closeImageViewer()">
+        <div class="relative max-w-3xl w-full flex justify-center">
+            <img id="viewerImage" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl border-4 border-white transform scale-50 transition-transform duration-300 ease-out" src="" alt="Enlarged Visual">
+            <button class="absolute top-2 right-2 bg-black/75 hover:bg-black text-white p-2 rounded-full border border-white" onclick="closeImageViewer()">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- AUTHENTICATION SCREEN -->
+    <div id="authScreen" class="flex-1 flex items-center justify-center p-2">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-xl w-full max-w-md border border-slate-100 dark:border-slate-700">
+            <div class="flex flex-col items-center mb-6">
+                <div class="p-2.5 bg-primary-100 dark:bg-primary-900/30 rounded-full mb-2">
+                    <i data-lucide="waves" class="w-7 h-7 text-primary-600"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Fish Trade Manager</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manage sales, purchases, & inventory</p>
+            </div>
+
+            <!-- TAB CONTROLS -->
+            <div class="flex bg-slate-100 dark:bg-slate-700 p-0.5 rounded-lg mb-4">
+                <button id="tabLoginBtn" class="flex-1 py-1.5 text-xs font-semibold rounded bg-white dark:bg-slate-600 shadow-sm transition" onclick="switchAuthTab('login')">Sign In</button>
+                <button id="tabSignupBtn" class="flex-1 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 transition" onclick="switchAuthTab('signup')">Sign Up</button>
+            </div>
+
+            <!-- LOGIN FORM -->
+            <form id="loginForm" class="space-y-3" onsubmit="handleAuthSubmit(event, 'login')">
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5">Email Address</label>
+                    <input type="email" id="loginEmail" required class="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-600 bg-transparent text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition placeholder-slate-400" placeholder="name@email.com">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5">Password</label>
+                    <input type="password" id="loginPassword" required class="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-600 bg-transparent text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition placeholder-slate-400" placeholder="••••••••">
+                </div>
+                <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold py-2 rounded shadow transition flex justify-center items-center gap-1.5 text-xs">
+                    <span>Access Dashboard</span>
+                    <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                </button>
+            </form>
+
+            <!-- SIGN UP FORM -->
+            <form id="signupForm" class="space-y-3 hidden" onsubmit="handleAuthSubmit(event, 'signup')">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5">Full Name</label>
+                        <input type="text" id="regName" required class="w-full px-2 py-1.5 rounded border border-slate-200 dark:border-slate-600 bg-transparent text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5">Mobile No.</label>
+                        <input type="text" id="regPhone" required class="w-full px-2 py-1.5 rounded border border-slate-200 dark:border-slate-600 bg-transparent text-xs focus:ring-2 focus:ring-primary-500 outline-none transition">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5">Email Address</label>
+                    <input type="email" id="regEmail" required class="w-full px-2 py-1.5 text-xs bg-transparent text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5">Arat Name</label>
+                        <input type="text" id="regArat" required class="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-transparent text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition" placeholder="e.g. Padma Fish Trade">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5">Address</label>
+                        <input type="text" id="regAddress" required class="w-full px-2 py-1.5 text-xs bg-transparent text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition placeholder-slate-450" placeholder="Location">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-0.5">Password</label>
+                    <input type="password" id="regPassword" required class="w-full px-3 py-1.5 rounded border border-slate-200 bg-transparent text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition" placeholder="Min. 6 characters">
+                </div>
+                <button type="submit" class="w-full bg-secondary-600 hover:bg-secondary-700 text-white font-semibold py-2 rounded shadow transition flex justify-center items-center gap-1.5 text-xs">
+                    <span>Create Account</span>
+                    <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                </button>
+            </form>
+
+            <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700 text-center">
+                <span class="text-[10px] text-slate-400 flex items-center justify-center gap-1">
+                    <i data-lucide="cloud-lightning" class="w-3 h-3 text-emerald-500 animate-pulse"></i> Realtime Database Active
+                </span>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- APP CONTAINER (HIDDEN UNTIL AUTHENTICATED) -->
+    <div id="appContainer" class="hidden flex-1 flex flex-col md:flex-row relative overflow-hidden">
+        
+        <!-- MOBILE BACKDROP OVERLAY -->
+        <div id="sidebarOverlay" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-35 md:hidden hidden opacity-0 transition-opacity duration-300" onclick="toggleSidebarMobile()"></div>
+
+        <!-- SIDE NAVIGATION BAR -->
+        <aside id="sidebarMenu" class="fixed md:static inset-y-0 left-0 z-40 w-64 bg-slate-900 text-slate-300 flex-shrink-0 flex flex-col border-r border-slate-800 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out">
+            <div class="p-4 flex items-center justify-between border-b border-slate-800">
+                <div class="flex items-center gap-2">
+                    <div class="bg-primary-600 text-white p-1.5 rounded">
+                        <i data-lucide="anchor" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h2 id="userAratName" class="font-bold text-white text-xs leading-tight truncate max-w-[120px]">Padma Arat</h2>
+                        <span id="userRealName" class="text-[10px] text-slate-400">Operator</span>
+                    </div>
+                </div>
+                <!-- Mobile Close Button -->
+                <button onclick="toggleSidebarMobile()" class="md:hidden p-1 text-slate-400 hover:text-white transition">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- NAV MENU ITEMS -->
+            <nav class="flex-1 p-2 space-y-0.5 overflow-y-auto">
+                <button onclick="navigateTo('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-2 px-2.5 py-2 rounded text-xs font-semibold transition hover:bg-slate-800 hover:text-white text-slate-400">
+                    <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i> Dashboard
+                </button>
+                <button onclick="navigateTo('fish')" id="nav-fish" class="w-full flex items-center gap-2 px-2.5 py-2 rounded text-xs font-semibold transition hover:bg-slate-800 hover:text-white text-slate-400">
+                    <i data-lucide="package" class="w-3.5 h-3.5"></i> Fish Master List
+                </button>
+                <button onclick="navigateTo('purchases')" id="nav-purchases" class="w-full flex items-center gap-2 px-2.5 py-2 rounded text-xs font-semibold transition hover:bg-slate-800 hover:text-white text-slate-400">
+                    <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i> Purchases
+                </button>
+                <button onclick="navigateTo('sales')" id="nav-sales" class="w-full flex items-center gap-2 px-2.5 py-2 rounded text-xs font-semibold transition hover:bg-slate-800 hover:text-white text-slate-400">
+                    <i data-lucide="trending-up" class="w-3.5 h-3.5"></i> Sales
+                </button>
+                <button onclick="navigateTo('inventory')" id="nav-inventory" class="w-full flex items-center gap-2 px-2.5 py-2 rounded text-xs font-semibold transition hover:bg-slate-800 hover:text-white text-slate-400">
+                    <i data-lucide="layers" class="w-3.5 h-3.5"></i> Current Stock
+                </button>
+                <button onclick="navigateTo('contacts')" id="nav-contacts" class="w-full flex items-center gap-2 px-2.5 py-2 rounded text-xs font-semibold transition hover:bg-slate-800 hover:text-white text-slate-400">
+                    <i data-lucide="users" class="w-3.5 h-3.5"></i> Suppliers & Buyers
+                </button>
+                <button onclick="navigateTo('expenses')" id="nav-expenses" class="w-full flex items-center gap-2 px-2.5 py-2 rounded text-xs font-semibold transition hover:bg-slate-800 hover:text-white text-slate-400">
+                    <i data-lucide="wallet" class="w-3.5 h-3.5"></i> Expenses
+                </button>
+                <button onclick="navigateTo('reports')" id="nav-reports" class="w-full flex items-center gap-2 px-2.5 py-2 rounded text-xs font-semibold transition hover:bg-slate-800 hover:text-white text-slate-400">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Reports
+                </button>
+                <button onclick="navigateTo('settings')" id="nav-settings" class="w-full flex items-center gap-2 px-2.5 py-2 rounded text-xs font-semibold transition hover:bg-slate-800 hover:text-white text-slate-400">
+                    <i data-lucide="settings" class="w-3.5 h-3.5"></i> Settings
+                </button>
+            </nav>
+
+            <!-- SIDEBAR FOOTER -->
+            <div class="p-3 border-t border-slate-800 flex items-center justify-between">
+                <button onclick="toggleDarkMode()" class="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white" title="Toggle Theme">
+                    <i data-lucide="moon" id="themeIcon" class="w-4.5 h-4.5"></i>
+                </button>
+                <button onclick="logOut()" class="p-1.5 rounded hover:bg-red-950 text-red-400 flex items-center gap-1 text-xs font-semibold transition">
+                    <i data-lucide="log-out" class="w-3.5 h-3.5"></i> Sign Out
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN WORKING AREA -->
+        <main class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+            
+            <!-- HEADER BAR -->
+            <header class="bg-white dark:bg-slate-800 border-b border-slate-150 dark:border-slate-700 h-14 px-3 md:px-6 flex items-center justify-between sticky top-0 z-30">
+                <div class="flex items-center gap-2">
+                    <button id="mobileMenuBtn" class="md:hidden p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition" onclick="toggleSidebarMobile()">
+                        <i data-lucide="menu" class="w-5 h-5"></i>
+                    </button>
+                    <h2 id="viewTitle" class="text-base font-bold tracking-tight text-slate-900 dark:text-white">Dashboard Overview</h2>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-1.5 text-[10px] text-slate-400">
+                        <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
+                        <span class="hidden sm:inline">Connected</span>
+                    </div>
+
+                    <div class="relative">
+                        <button onclick="toggleNotifications()" class="p-1.5 text-slate-500 hover:text-primary-600 transition rounded-full relative">
+                            <i data-lucide="bell" class="w-4.5 h-4.5"></i>
+                            <span id="notifBadge" class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full hidden"></span>
+                        </button>
+                        <div id="notifMenu" class="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded shadow-xl p-3 hidden z-50">
+                            <h3 class="font-bold text-xs mb-1.5 pb-1.5 border-b">Alerts & Notifications</h3>
+                            <div id="notifList" class="space-y-1.5 max-h-60 overflow-y-auto text-[10px] text-slate-500"></div>
+                        </div>
+                    </div>
+
+                    <!-- Profile Circle -->
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-xs text-primary-700">
+                            F
+                        </div>
+                        <span id="headerAratTag" class="text-[10px] font-bold px-1.5 py-0.5 bg-green-50 text-green-700 dark:bg-slate-700 dark:text-green-300 rounded">₹ INR</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- PAGES / VIEWS CONTAINER (Zero horizontal padding on mobile) -->
+            <div class="px-0 py-4 md:px-6 max-w-7xl w-full mx-auto space-y-4">
+
+                <!-- 1. DASHBOARD VIEW -->
+                <div id="view-dashboard" class="space-y-4">
+                    <!-- Stat Grid -->
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                        <div class="bg-white dark:bg-slate-800 p-3 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                            <div class="flex items-center justify-between text-slate-400 mb-1">
+                                <span class="text-[10px] font-bold uppercase tracking-wide">Today's Purchases</span>
+                                <i data-lucide="shopping-bag" class="w-3.5 h-3.5 text-emerald-500"></i>
+                            </div>
+                            <span id="statTodayPurchase" class="text-base lg:text-lg font-bold">₹0.00</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-800 p-3 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                            <div class="flex items-center justify-between text-slate-400 mb-1">
+                                <span class="text-[10px] font-bold uppercase tracking-wide">Today's Sales</span>
+                                <i data-lucide="trending-up" class="w-3.5 h-3.5 text-blue-500"></i>
+                            </div>
+                            <span id="statTodaySales" class="text-base lg:text-lg font-bold">₹0.00</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-800 p-3 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                            <div class="flex items-center justify-between text-slate-400 mb-1">
+                                <span class="text-[10px] font-bold uppercase tracking-wide">Today's Profit</span>
+                                <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-green-500"></i>
+                            </div>
+                            <span id="statTodayProfit" class="text-base lg:text-lg font-bold text-green-600">₹0.00</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-800 p-3 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                            <div class="flex items-center justify-between text-slate-400 mb-1">
+                                <span class="text-[10px] font-bold uppercase tracking-wide">Current Stock</span>
+                                <i data-lucide="box" class="w-3.5 h-3.5 text-cyan-500"></i>
+                            </div>
+                            <span id="statCurrentStock" class="text-base lg:text-lg font-bold">0 Kg</span>
+                        </div>
+                    </div>
+
+                    <!-- Secondary Stats -->
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                        <div class="bg-slate-800 text-white p-3 rounded-none sm:rounded-xl flex flex-col justify-between">
+                            <span class="text-[10px] text-slate-400 uppercase font-semibold">Total Accounts Receivable</span>
+                            <span id="statTotalDue" class="text-sm lg:text-base font-extrabold mt-0.5 text-sky-400">₹0.00</span>
+                        </div>
+                        <div class="bg-slate-800 text-white p-3 rounded-none sm:rounded-xl flex flex-col justify-between">
+                            <span class="text-[10px] text-slate-400 uppercase font-semibold">Total Accounts Payable</span>
+                            <span id="statTotalPayable" class="text-sm lg:text-base font-extrabold mt-0.5 text-red-400 flex font-bold">₹0.00</span>
+                        </div>
+                        <div class="bg-slate-800 text-white p-3 rounded-none sm:rounded-xl flex flex-col justify-between">
+                            <span class="text-[10px] text-slate-400 uppercase font-semibold">This Month Profit</span>
+                            <span id="statMonthProfit" class="text-sm lg:text-base font-extrabold mt-0.5 text-emerald-400 font-bold">₹0.00</span>
+                        </div>
+                        <div class="bg-slate-800 text-white p-3 rounded-none sm:rounded-xl flex flex-col justify-between">
+                            <span class="text-[10px] text-slate-400 uppercase font-semibold">This Year Profit</span>
+                            <span id="statYearProfit" class="text-sm lg:text-base font-extrabold mt-0.5 text-green-400 font-bold">₹0.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Performance and Stock Overview -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm col-span-2">
+                            <h3 class="font-bold text-xs mb-3 flex items-center gap-1.5"><i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i> Monthly Business Summary</h3>
+                            <div class="h-56">
+                                <canvas id="dashboardChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                            <h3 class="font-bold text-xs mb-3 flex items-center gap-1.5"><i data-lucide="pie-chart" class="w-3.5 h-3.5"></i> Stock Distribution</h3>
+                            <div class="h-56 flex items-center justify-center">
+                                <canvas id="stockDistributionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent tables row -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="font-bold text-xs">Recent Sales</h3>
+                                <button onclick="navigateTo('sales')" class="text-[10px] font-bold text-secondary-600 hover:underline">View All</button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-[11px] text-slate-500 solid-table">
+                                    <thead class="bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 uppercase font-bold">
+                                        <tr>
+                                            <th class="p-1.5">Inv No</th>
+                                            <th class="p-1.5">Buyer</th>
+                                            <th class="p-1.5 text-right">Total</th>
+                                            <th class="p-1.5 text-right">Profit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dashRecentSales"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="font-bold text-xs">Recent Purchases</h3>
+                                <button onclick="navigateTo('purchases')" class="text-[10px] font-bold text-primary-600 hover:underline">View All</button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-[11px] text-slate-500 solid-table">
+                                    <thead class="bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 uppercase font-bold">
+                                        <tr>
+                                            <th class="p-1.5">Inv No</th>
+                                            <th class="p-1.5">Supplier</th>
+                                            <th class="p-1.5 text-right">Grand Total</th>
+                                            <th class="p-1.5">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dashRecentPurchases"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- 2. FISH MASTER VIEW -->
+                <div id="view-fish" class="space-y-4">
+                    <!-- Title & Registration Header -->
+                    <div class="flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                        <div>
+                            <h3 class="font-bold text-sm">Registered Fish Profiles</h3>
+                            <p class="text-[10px] text-slate-400">Configure catalog options & categories</p>
+                        </div>
+                        <button onclick="openModal('addFishModal')" class="bg-primary-600 hover:bg-primary-700 text-white font-semibold text-[10px] px-2.5 py-1.5 rounded transition flex items-center gap-1">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add New Fish Catalog
+                        </button>
+                    </div>
+
+                    <!-- ASYMMETRIC 12-COLUMN SINGLE ROW FILTERS -->
+                    <div class="grid grid-cols-12 gap-1.5 w-full bg-white dark:bg-slate-800 p-2 border-y sm:border border-black dark:border-white shadow-sm items-center">
+                        <!-- Search Box (Large size - 50% width) -->
+                        <div class="col-span-6">
+                            <input type="text" id="fishSearchInput" oninput="filterFishCatalog()" class="modal-input" placeholder="Search Fish Name...">
+                        </div>
+                        
+                        <!-- Category Filter (Small size - 25% width) -->
+                        <div class="col-span-3">
+                            <select id="fishCategoryFilter" onchange="filterFishCatalog()" class="modal-input text-[11px] sm:text-xs" style="padding: 10px 4px;">
+                                <option value="">Category</option>
+                                <option value="Carp">Carp</option>
+                                <option value="Hilsha">Hilsha</option>
+                                <option value="Catfish">Catfish</option>
+                                <option value="Shrimp">Shrimp</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Rate Filter (Small size - 25% width) -->
+                        <div class="col-span-3">
+                            <select id="fishRateFilter" onchange="filterFishCatalog()" class="modal-input text-[11px] sm:text-xs" style="padding: 10px 4px;">
+                                <option value="">Prices</option>
+                                <option value="under200">Under ₹200</option>
+                                <option value="200-500">₹200-500</option>
+                                <option value="above500">Above ₹500</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Strictly TWO COLUMNS layout -->
+                    <div id="fishListGrid" class="grid grid-cols-2 gap-2 sm:gap-4 px-1 sm:px-0"></div>
+                </div>
+
+
+                <!-- 3. PURCHASES VIEW -->
+                <div id="view-purchases" class="space-y-4 hidden">
+                    <div class="flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                        <div>
+                            <h3 class="font-bold text-sm">Purchase Ledgers</h3>
+                            <p class="text-[10px] text-slate-400">Document purchase invoices and transport logistics</p>
+                        </div>
+                        <button onclick="openModal('addPurchaseModal'); setupPurchaseFormOptions();" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[10px] px-2.5 py-1.5 rounded transition flex items-center gap-1">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Purchase
+                        </button>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 p-3 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm flex flex-col md:flex-row gap-2 items-center justify-between">
+                        <div class="relative w-full md:w-80">
+                            <i data-lucide="search" class="absolute left-2.5 top-2 w-3.5 h-3.5 text-slate-400"></i>
+                            <input type="text" id="searchPurchaseInput" oninput="filterPurchases()" class="w-full pl-8 pr-3 py-1.5 rounded text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 outline-none focus:ring-1 focus:ring-primary-500" placeholder="Search Supplier name or Invoice #">
+                        </div>
+                        <div class="flex gap-1.5 w-full md:w-auto">
+                            <input type="date" id="purchaseFilterDate" onchange="filterPurchases()" class="px-2 py-1.5 rounded text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 outline-none">
+                            <button onclick="resetPurchaseFilters()" class="text-[10px] px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 rounded">Clear</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs text-slate-500 solid-table">
+                                <thead class="bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 uppercase font-bold tracking-wider">
+                                    <tr>
+                                        <th class="p-3">Inv No</th>
+                                        <th class="p-3">Date</th>
+                                        <th class="p-3">Supplier Info</th>
+                                        <th class="p-3">Logistics</th>
+                                        <th class="p-3 text-right">Grand Total</th>
+                                        <th class="p-3 text-right">Due Balance</th>
+                                        <th class="p-3">Payment</th>
+                                        <th class="p-3 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="purchasesTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- 4. SALES VIEW -->
+                <div id="view-sales" class="space-y-4 hidden">
+                    <div class="flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                        <div>
+                            <h3 class="font-bold text-sm">Sales & Billings</h3>
+                            <p class="text-[10px] text-slate-400">Generate sales orders & log cash receipt</p>
+                        </div>
+                        <button onclick="openModal('addSaleModal'); setupSalesFormOptions();" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[10px] px-2.5 py-1.5 rounded transition flex items-center gap-1">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> New Sales Invoice
+                        </button>
+                    </div>
+
+                    <!-- Filters and Search Bar -->
+                    <div class="bg-white dark:bg-slate-800 p-3 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm flex flex-col md:flex-row gap-2 items-center justify-between">
+                        <div class="relative w-full md:w-80">
+                            <i data-lucide="search" class="absolute left-2.5 top-2 w-3.5 h-3.5 text-slate-400"></i>
+                            <input type="text" id="searchSaleInput" oninput="filterSales()" class="w-full pl-8 pr-3 py-1.5 rounded text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 outline-none focus:ring-1 focus:ring-primary-500" placeholder="Search Buyer name or Invoice #">
+                        </div>
+                        <div class="flex gap-1.5 w-full md:w-auto">
+                            <input type="date" id="salesFilterDate" onchange="filterSales()" class="px-2 py-1.5 rounded text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 outline-none">
+                            <button onclick="resetSalesFilters()" class="text-[10px] px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 rounded">Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- Sales Invoice Table -->
+                    <div class="bg-white dark:bg-slate-800 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs text-slate-500 solid-table">
+                                <thead class="bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 uppercase font-bold tracking-wider">
+                                    <tr>
+                                        <th class="p-3">Inv No</th>
+                                        <th class="p-3">Date</th>
+                                        <th class="p-3">Buyer Info</th>
+                                        <th class="p-3 text-right">Items Sales</th>
+                                        <th class="p-3 text-right">Expenses</th>
+                                        <th class="p-3 text-right">Net Profit</th>
+                                        <th class="p-3 text-right">Balance Due</th>
+                                        <th class="p-3 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="salesTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- 5. INVENTORY STOCK VIEW -->
+                <div id="view-inventory" class="space-y-4 hidden">
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm">
+                        <h3 class="font-bold text-sm mb-1">Real-Time Inventory Levels</h3>
+                        <p class="text-[10px] text-slate-400 mb-4">Quantities update in real-time as transactions occur</p>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs text-slate-500 solid-table">
+                                <thead class="bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 uppercase font-bold tracking-wider">
+                                    <tr>
+                                        <th class="p-3">Fish Identity</th>
+                                        <th class="p-3">Category</th>
+                                        <th class="p-3">Total Purchases</th>
+                                        <th class="p-3">Total Dispatched</th>
+                                        <th class="p-3 text-center">Available Stock</th>
+                                        <th class="p-3 text-right">Avg Purchase Price</th>
+                                        <th class="p-3 text-right">Accumulated Profit</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inventoryTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- 6. CONTACTS: SUPPLIERS & BUYERS -->
+                <div id="view-contacts" class="space-y-4 hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <!-- Suppliers Card -->
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm space-y-3">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-bold text-xs">Suppliers Ledger</h3>
+                                <button onclick="openModal('addSupplierModal')" class="text-[10px] font-semibold text-primary-600 border border-primary-600 px-2 py-1 rounded hover:bg-primary-50 transition">Add Supplier</button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-[11px] text-slate-500 solid-table">
+                                    <thead class="bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 uppercase font-bold">
+                                        <tr>
+                                            <th class="p-2">Name</th>
+                                            <th class="p-2">Arat Details</th>
+                                            <th class="p-2 text-right">Transactions</th>
+                                            <th class="p-2 text-right">Balance Due</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="suppliersTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Buyers Card -->
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm space-y-3">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-bold text-xs">Buyers Database</h3>
+                                <button onclick="openModal('addBuyerModal')" class="text-[10px] font-semibold text-secondary-600 border border-secondary-600 px-2 py-1 rounded hover:bg-secondary-50 transition">Add Buyer</button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-[11px] text-slate-500 solid-table">
+                                    <thead class="bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 uppercase font-bold">
+                                        <tr>
+                                            <th class="p-2">Name</th>
+                                            <th class="p-2">Market Details</th>
+                                            <th class="p-2 text-right">Purchases</th>
+                                            <th class="p-2 text-right">Due Bal.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="buyersTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- 7. EXPENSES VIEW -->
+                <div id="view-expenses" class="space-y-4 hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <!-- Expense Logging form -->
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm space-y-3">
+                            <h3 class="font-bold text-xs">Post Operating Expense</h3>
+                            <form id="expenseForm" onsubmit="handlePostExpense(event)" class="space-y-2">
+                                <div>
+                                    <label class="block text-[10px] font-semibold mb-0.5">Expense Date</label>
+                                    <input type="date" id="expDate" required class="modal-input">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-semibold mb-0.5">Category</label>
+                                    <select id="expCategory" required class="modal-input">
+                                        <option value="Diesel">Diesel / Fuel</option>
+                                        <option value="Ice">Ice Purchases</option>
+                                        <option value="Labour">Labour Wages</option>
+                                        <option value="Transportation">Transportation</option>
+                                        <option value="Food">Fooding Expense</option>
+                                        <option value="Others">Others</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-semibold mb-0.5">Total Amount (₹)</label>
+                                    <input type="number" id="expAmount" step="0.01" required class="modal-input">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-semibold mb-0.5">Short Description</label>
+                                    <textarea id="expDesc" class="modal-input" rows="2" placeholder="Specific notes..."></textarea>
+                                </div>
+                                <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-1.5 rounded text-xs shadow transition flex justify-center items-center gap-1.5">
+                                    <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Post Operating Expense
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Expense Ledger list -->
+                        <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm col-span-2 space-y-3">
+                            <h3 class="font-bold text-xs">Operating Expenses Log</h3>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-xs text-slate-500 solid-table">
+                                    <thead class="bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 uppercase font-bold">
+                                        <tr>
+                                            <th class="p-3">Date</th>
+                                            <th class="p-3">Category</th>
+                                            <th class="p-3">Log Details</th>
+                                            <th class="p-3 text-right">Amount Out (₹)</th>
+                                            <th class="p-3 text-center">Delete</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="expensesTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- 8. REPORTS VIEW -->
+                <div id="view-reports" class="space-y-4 hidden">
+                    <!-- Filters and Search Bar -->
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm space-y-3">
+                        <h3 class="font-bold text-xs">Generate Dynamic Profit/Loss Statements</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-semibold text-slate-400 mb-0.5">Timeframe Selection</label>
+                                <select id="reportTimeframe" class="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded outline-none" onchange="updateReportData()">
+                                    <option value="daily">Daily Report (Today)</option>
+                                    <option value="weekly">Weekly Report (Last 7 Days)</option>
+                                    <option value="monthly" selected>Monthly Report (Last 30 Days)</option>
+                                    <option value="yearly">Yearly Report (This Year)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold text-slate-400 mb-0.5">Specific Category Filter</label>
+                                <select id="reportCategory" class="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded outline-none" onchange="updateReportData()">
+                                    <option value="all">All Items & Accounts</option>
+                                    <option value="fish-wise">Fish Profitability Only</option>
+                                    <option value="due-reports">Due Statements Only</option>
+                                    <option value="expense">Operating Expenses Only</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2 flex items-end gap-1.5">
+                                <button onclick="window.print()" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-semibold py-1.5 rounded text-xs transition flex justify-center items-center gap-1">
+                                    <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print Statement
+                                </button>
+                                <button onclick="exportToCSV()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-semibold py-1.5 rounded text-xs transition flex justify-center items-center gap-1">
+                                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Ledger CSV
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Report Table Display Container -->
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm space-y-3">
+                        <div class="flex justify-between items-center border-b pb-2.5 border-slate-100 dark:border-slate-700">
+                            <h4 id="reportStatementTitle" class="font-bold text-xs text-slate-700 dark:text-slate-200">Profit & Loss Report (Last 30 Days)</h4>
+                            <span class="text-[10px] text-slate-400">Currency unit in INR (₹)</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs text-slate-500 solid-table">
+                                <thead id="reportTableHeader" class="bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider"></thead>
+                                <tbody id="reportTableBody" class="text-[11px]"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- 9. SETTINGS VIEW -->
+                <div id="view-settings" class="space-y-6 hidden">
+                    <div class="max-w-xl bg-white dark:bg-slate-800 p-5 rounded-none sm:rounded-xl border-y sm:border border-black dark:border-white shadow-sm space-y-5">
+                        <h3 class="font-bold text-sm pb-2 border-b border-slate-150 dark:border-slate-700">Arat Configuration</h3>
+                        
+                        <form id="settingsForm" onsubmit="handleSaveSettings(event)" class="space-y-3">
+                            <div>
+                                <label class="block text-[10px] font-semibold mb-0.5">Company / Arat Name</label>
+                                <input type="text" id="setAratName" required class="w-full px-2.5 py-1.5 rounded text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold mb-0.5">Operator's Full Name</label>
+                                <input type="text" id="setOpName" required class="w-full px-2.5 py-1.5 rounded text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold mb-0.5">Arat Head Office Location</label>
+                                <input type="text" id="setAddress" required class="w-full px-2.5 py-1.5 rounded text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold mb-0.5">Active Currency Unit</label>
+                                <select id="setCurrency" class="w-full px-2.5 py-1.5 rounded text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 outline-none">
+                                    <option value="₹">₹ Rupee (INR)</option>
+                                    <option value="$">$ Dollar (USD)</option>
+                                    <option value="৳">৳ Taka (BDT)</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="bg-primary-600 hover:bg-primary-700 text-white font-semibold py-1.5 px-3 rounded text-xs shadow transition">
+                                Save Profile Changes
+                            </button>
+                        </form>
+
+                        <div class="pt-5 border-t border-slate-150 dark:border-slate-700 space-y-3">
+                            <h4 class="font-bold text-xs text-red-500">Danger Zone</h4>
+                            <p class="text-[10px] text-slate-400">Clearing the database resets all local & cloud sync logs.</p>
+                            <div class="flex gap-1.5">
+                                <button onclick="factoryResetDatabase()" class="bg-red-50 hover:bg-red-100 dark:bg-red-950/20 text-red-600 border border-red-200 dark:border-red-900/50 font-bold px-2.5 py-1.5 rounded text-[10px] transition">
+                                    Factory Reset All Records
+                                </button>
+                                <button onclick="seedMockData()" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 font-bold px-2.5 py-1.5 rounded text-[10px] transition">
+                                    Seed Demo Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+
+    <!-- ==================== MODALS CONFIGURATION ==================== -->
+
+    <!-- ADD/EDIT DYNAMIC FISH ITEM MODAL -->
+    <div id="addFishModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 z-50 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-xl w-full max-w-md p-5 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div class="flex justify-between items-center mb-3">
+                <h3 id="fishModalTitle" class="font-bold text-sm">Add New Fish Item</h3>
+                <button onclick="closeModal('addFishModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="fishForm" onsubmit="handlePostFish(event)" class="space-y-3">
+                <input type="hidden" id="editFishId" value="">
+                
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Fish Breed Name</label>
+                    <input type="text" id="fishName" required class="modal-input animate-none" placeholder="e.g. Rui Carp">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Category / Group</label>
+                    <select id="fishCategory" class="modal-input">
+                        <option value="Carp">Carp</option>
+                        <option value="Hilsha">Hilsha</option>
+                        <option value="Catfish">Catfish</option>
+                        <option value="Shrimp">Shrimp</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Unit of Measurement</label>
+                    <select id="fishUnit" class="modal-input">
+                        <option value="Kg">Kilograms (Kg)</option>
+                        <option value="Pcs">Pieces (Pcs)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Fish Image (Optional)</label>
+                    <input type="file" id="fishImageInput" accept="image/*" class="modal-input" onchange="previewFishImage(event)">
+                    <div id="fishImagePreviewContainer" class="mt-2 hidden">
+                        <img id="fishImagePreview" class="w-full h-32 object-cover rounded border-2 border-black" src="" alt="Selected Preview">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Internal Log Notes</label>
+                    <input type="text" id="fishNote" class="modal-input animate-none" placeholder="Quality comments">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" id="fishModalSubmitBtn" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-semibold py-1.5 rounded text-xs shadow transition">
+                        Register Profile
+                    </button>
+                    <button type="button" id="fishModalDeleteBtn" onclick="handleDeleteFish()" class="hidden bg-red-600 hover:bg-red-700 text-white font-semibold py-1.5 px-3 rounded text-xs shadow transition">
+                        Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADD PURCHASE MODAL -->
+    <div id="addPurchaseModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 z-50 hidden overflow-y-auto">
+        <div class="bg-white dark:bg-slate-800 rounded-xl w-full max-w-lg p-5 shadow-2xl my-8">
+            <div class="flex justify-between items-center mb-3 pb-2 border-b border-black">
+                <h3 class="font-bold text-sm">Log New Purchase Voucher</h3>
+                <button onclick="closeModal('addPurchaseModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="purchaseForm" onsubmit="handlePostPurchase(event)" class="space-y-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Date</label>
+                        <input type="date" id="purDate" required class="modal-input">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Supplier Profile</label>
+                        <select id="purSupplierId" required class="modal-input"></select>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 dark:bg-slate-700 p-3 rounded-lg border-2 border-slate-700 space-y-2">
+                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">Order Line Items</span>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="col-span-1">
+                            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-300 mb-1">Fish Catalog</label>
+                            <select id="purFishId" class="modal-input"></select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-300 mb-1">Quantity (Kg/Pcs)</label>
+                            <input type="number" id="purQty" step="0.01" class="modal-input" oninput="recalcPurchaseTotals()">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-300 mb-1">Unit Cost (₹)</label>
+                            <input type="number" id="purPrice" step="0.01" class="modal-input" oninput="recalcPurchaseTotals()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-4 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">Transport</label>
+                        <input type="number" id="purCostTransport" value="0" class="modal-input" oninput="recalcPurchaseTotals()">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">Ice Cost</label>
+                        <input type="number" id="purCostIce" value="0" class="modal-input" oninput="recalcPurchaseTotals()">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">Labour Fee</label>
+                        <input type="number" id="purCostLabour" value="0" class="modal-input" oninput="recalcPurchaseTotals()">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">Other Fees</label>
+                        <input type="number" id="purCostOther" value="0" class="modal-input" oninput="recalcPurchaseTotals()">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 pt-2 border-t border-black">
+                    <div class="bg-emerald-50 dark:bg-slate-700/50 p-2 rounded border border-emerald-600">
+                        <label class="block text-[9px] font-bold text-emerald-600">Grand Total</label>
+                        <span id="purLabelGrandTotal" class="text-sm font-extrabold text-slate-800 dark:text-white">₹0.00</span>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">Paid Out (₹)</label>
+                        <input type="number" id="purPaidAmount" step="0.01" class="modal-input" oninput="recalcPurchaseTotals()">
+                    </div>
+                    <div class="bg-red-50 dark:bg-slate-700/50 p-2 rounded border border-red-600">
+                        <label class="block text-[9px] font-bold text-red-600">Remaining Due</label>
+                        <span id="purLabelDue" class="text-sm font-extrabold text-slate-800 dark:text-white">₹0.00</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Internal Comment</label>
+                    <input type="text" id="purNote" class="modal-input">
+                </div>
+
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded text-xs shadow transition">
+                    Commit Purchase Order
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADD SALE MODAL -->
+    <div id="addSaleModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 z-50 hidden overflow-y-auto">
+        <div class="bg-white dark:bg-slate-800 rounded-xl w-full max-w-lg p-5 shadow-2xl my-8">
+            <div class="flex justify-between items-center mb-3 pb-2 border-b border-black">
+                <h3 class="font-bold text-sm">Log Sales Invoice</h3>
+                <button onclick="closeModal('addSaleModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="saleForm" onsubmit="handlePostSale(event)" class="space-y-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Date</label>
+                        <input type="date" id="saleDate" required class="modal-input">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Buyer Profile</label>
+                        <select id="saleBuyerId" required class="modal-input"></select>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 dark:bg-slate-700 p-3 rounded-lg border-2 border-slate-700 space-y-2">
+                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">Order Line Items</span>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-300 mb-1">Fish Catalog</label>
+                            <select id="saleFishId" class="modal-input" onchange="updateSalePricePlaceholder()"></select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-300 mb-1">Quantity</label>
+                            <input type="number" id="saleQty" step="0.01" class="modal-input" oninput="recalcSalesTotals()">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-300 mb-1">Selling Price / Unit</label>
+                            <input type="number" id="salePrice" step="0.01" class="modal-input" oninput="recalcSalesTotals()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Transportation / Delivery Out</label>
+                        <input type="number" id="saleCostTransport" value="0" class="modal-input" oninput="recalcSalesTotals()">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Other Delivery Surcharges</label>
+                        <input type="number" id="saleCostOther" value="0" class="modal-input" oninput="recalcSalesTotals()">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 pt-2 border-t border-black">
+                    <div class="bg-blue-50 dark:bg-slate-700/50 p-2 rounded border border-blue-600">
+                        <label class="block text-[9px] font-bold text-blue-600">Net Invoice Value</label>
+                        <span id="saleLabelGrandTotal" class="text-sm font-extrabold text-slate-800 dark:text-white">₹0.00</span>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Collected Amount (₹)</label>
+                        <input type="number" id="salePaidAmount" step="0.01" class="modal-input" oninput="recalcSalesTotals()">
+                    </div>
+                    <div class="bg-amber-50 dark:bg-slate-700/50 p-2 rounded border border-amber-600">
+                        <label class="block text-[9px] font-bold text-amber-600">Balance Due</label>
+                        <span id="saleLabelDue" class="text-sm font-extrabold text-slate-800 dark:text-white">₹0.00</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded text-xs shadow transition">
+                    Commit Sales Invoice
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADD SUPPLIER MODAL -->
+    <div id="addSupplierModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 z-50 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-xl w-full max-w-md p-5 shadow-2xl">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-bold text-sm">Add New Supplier Profile</h3>
+                <button onclick="closeModal('addSupplierModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form onsubmit="handlePostSupplier(event)" class="space-y-3">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Supplier Name</label>
+                    <input type="text" id="suppName" required class="modal-input">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Arat Office / Brand</label>
+                    <input type="text" id="suppArat" required class="modal-input">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
+                    <input type="text" id="suppPhone" required class="modal-input">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Mailing Address</label>
+                    <input type="text" id="suppAddress" class="modal-input">
+                </div>
+                <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold py-2 rounded text-xs shadow transition">
+                    Save Supplier Profile
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADD BUYER MODAL -->
+    <div id="addBuyerModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 z-50 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-xl w-full max-w-md p-5 shadow-2xl">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-bold text-sm">Add New Buyer Profile</h3>
+                <button onclick="closeModal('addBuyerModal')" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form onsubmit="handlePostBuyer(event)" class="space-y-3">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Buyer Full Name</label>
+                    <input type="text" id="buyerName" required class="modal-input">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Destination Market</label>
+                    <input type="text" id="buyerMarket" required class="modal-input">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-semibold mb-0.5">Mobile Contact</label>
+                    <input type="text" id="buyerPhone" required class="w-full px-2.5 py-1.5 rounded text-xs bg-slate-50 dark:bg-slate-700 border border-slate-200 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-semibold mb-0.5">Billing Address</label>
+                    <input type="text" id="buyerAddress" class="modal-input">
+                </div>
+                <button type="submit" class="w-full bg-secondary-600 hover:bg-secondary-700 text-white font-semibold py-2 rounded text-xs shadow transition">
+                    Save Buyer Profile
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- DETAIL / PRINT INVOICE MODAL -->
+    <div id="invoiceDetailModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 z-50 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-xl w-full max-w-xl p-5 shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center mb-3 pb-2 border-b border-black">
+                <h3 class="font-bold text-sm">Transaction Voucher</h3>
+                <div class="flex gap-1.5">
+                    <button onclick="window.print()" class="text-slate-500 hover:text-slate-800 p-1.5 hover:bg-slate-100 rounded"><i data-lucide="printer" class="w-4 h-4"></i></button>
+                    <button onclick="closeModal('invoiceDetailModal')" class="text-slate-400 hover:text-slate-600 p-1.5"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+            
+            <div id="printArea" class="flex-1 overflow-y-auto space-y-4 text-slate-800 dark:text-slate-200 p-3 bg-white dark:bg-slate-800 rounded"></div>
+        </div>
+    </div>
+
+
+    <!-- ==================== SYSTEM SCRIPTS & INTERACTION ==================== -->
+    <script>
+        // 1. FIREBASE INITIALIZATION
+        const firebaseConfig = {
+            apiKey: "AIzaSyD6aaFh37dlSHfuzFXyLJSVd5eMfInaGSQ",
+            authDomain: "ecomomarce.firebaseapp.com",
+            databaseURL: "https://ecomomarce-default-rtdb.firebaseio.com",
+            projectId: "ecomomarce",
+            storageBucket: "ecomomarce.firebasestorage.app",
+            messagingSenderId: "159917153021",
+            appId: "1:159917153021:web:e0f2344a8a3ca4d5673c94",
+            measurementId: "G-HK1X57SG7R"
+        };
+
+        // Initialize compat SDK modules
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const rtdb = firebase.database();
+
+        // Core App UI Memory State
+        let state = {
+            currentUser: null,
+            activeView: 'dashboard',
+            theme: 'light',
+            notifications: []
+        };
+
+        let db = {
+            profile: {},
+            fish: {},
+            suppliers: {},
+            buyers: {},
+            purchases: {},
+            sales: {},
+            expenses: {}
+        };
+
+        let dashboardChartInstance = null;
+        let stockChartInstance = null;
+        let isSidebarMobileOpen = false;
+
+        // Monitor Auth state changes in Realtime
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            applyTheme();
+
+            showSpinner();
+            auth.onAuthStateChanged(user => {
+                hideSpinner();
+                if (user) {
+                    state.currentUser = user.uid;
+                    attachRealtimeDatabaseListeners(user.uid);
+                } else {
+                    state.currentUser = null;
+                    showAuthScreen();
+                }
+            });
+        });
+
+        // Show/Hide progress spinner
+        function showSpinner() {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+        function hideSpinner() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        // Image selection and live preview helper
+        function previewFishImage(event) {
+            const previewContainer = document.getElementById('fishImagePreviewContainer');
+            const previewImg = document.getElementById('fishImagePreview');
+            const file = event.target.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    previewContainer.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewContainer.classList.add('hidden');
+            }
+        }
+
+        // Full Screen Image zoom triggers
+        function openImageViewer(src, event) {
+            if (event) event.stopPropagation(); // Stops parent grid card click triggering details modal
+            
+            const modal = document.getElementById('imageViewerModal');
+            const image = document.getElementById('viewerImage');
+            
+            image.src = src;
+            modal.classList.remove('hidden');
+            
+            // Force browser layout redraw before initiating scale animation
+            modal.offsetHeight;
+            
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100');
+            image.classList.remove('scale-50');
+            image.classList.add('scale-100');
+        }
+
+        function closeImageViewer() {
+            const modal = document.getElementById('imageViewerModal');
+            const image = document.getElementById('viewerImage');
+            
+            image.classList.remove('scale-100');
+            image.classList.add('scale-50');
+            modal.classList.remove('opacity-100');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // Mobile responsive sidebar animation toggle
+        function toggleSidebarMobile() {
+            const sidebar = document.getElementById('sidebarMenu');
+            const overlay = document.getElementById('sidebarOverlay');
+
+            if (isSidebarMobileOpen) {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('opacity-0');
+                overlay.classList.remove('opacity-100');
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 300);
+                isSidebarMobileOpen = false;
+            } else {
+                overlay.classList.remove('hidden');
+                overlay.offsetHeight;
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.remove('opacity-0');
+                overlay.classList.add('opacity-100');
+                isSidebarMobileOpen = true;
+            }
+        }
+
+        // Firebase RTB Realtime Synchronization Listener
+        function attachRealtimeDatabaseListeners(uid) {
+            showSpinner();
+            const userRef = rtdb.ref(`users/${uid}`);
+
+            userRef.on('value', snapshot => {
+                hideSpinner();
+                const data = snapshot.val();
+                if (data) {
+                    db.profile = data.profile || {};
+                    db.fish = data.fish || {};
+                    db.suppliers = data.suppliers || {};
+                    db.buyers = data.buyers || {};
+                    db.purchases = data.purchases || {};
+                    db.sales = data.sales || {};
+                    db.expenses = data.expenses || {};
+                } else {
+                    db = { profile: {}, fish: {}, suppliers: {}, buyers: {}, purchases: {}, sales: {}, expenses: {} };
+                }
+
+                bootApp();
+            }, error => {
+                hideSpinner();
+                console.error("Database sync failed: ", error);
+            });
+        }
+
+        // Write modifications to Firebase
+        function saveToFirebase() {
+            if (!state.currentUser) return;
+            showSpinner();
+            rtdb.ref(`users/${state.currentUser}`).set(db)
+                .then(() => hideSpinner())
+                .catch(err => {
+                    hideSpinner();
+                    console.error("Write failed: ", err);
+                    alert("Sync error. Please verify network parameters.");
+                });
+        }
+
+        // UI View Switch Tab Engine
+        function switchAuthTab(tab) {
+            const loginBtn = document.getElementById('tabLoginBtn');
+            const signupBtn = document.getElementById('tabSignupBtn');
+            const loginForm = document.getElementById('loginForm');
+            const signupForm = document.getElementById('signupForm');
+
+            if (tab === 'login') {
+                loginBtn.className = "flex-1 py-1.5 text-xs font-semibold rounded bg-white dark:bg-slate-600 shadow-sm text-slate-800 dark:text-white transition";
+                signupBtn.className = "flex-1 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 transition";
+                loginForm.classList.remove('hidden');
+                signupForm.classList.add('hidden');
+            } else {
+                signupBtn.className = "flex-1 py-1.5 text-xs font-semibold bg-white dark:bg-slate-600 shadow-sm text-slate-800 dark:text-white transition";
+                loginBtn.className = "flex-1 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 transition";
+                signupForm.classList.remove('hidden');
+                loginForm.classList.add('hidden');
+            }
+        }
+
+        // Handle Signup/Login Submission
+        function handleAuthSubmit(event, type) {
+            event.preventDefault();
+            showSpinner();
+
+            if (type === 'login') {
+                const email = document.getElementById('loginEmail').value;
+                const pass = document.getElementById('loginPassword').value;
+
+                auth.signInWithEmailAndPassword(email, pass)
+                    .then(userCredential => {})
+                    .catch(err => {
+                        hideSpinner();
+                        alert("Authentication failed: " + err.message);
+                    });
+            } else {
+                const email = document.getElementById('regEmail').value;
+                const pass = document.getElementById('regPassword').value;
+                const name = document.getElementById('regName').value;
+                const phone = document.getElementById('regPhone').value;
+                const arat = document.getElementById('regArat').value;
+                const address = document.getElementById('regAddress').value;
+
+                auth.createUserWithEmailAndPassword(email, pass)
+                    .then(userCredential => {
+                        const uid = userCredential.user.uid;
+                        const initialData = {
+                            profile: { fullName: name, phone, aratName: arat, address, email },
+                            fish: {}, suppliers: {}, buyers: {}, purchases: {}, sales: {}, expenses: {}
+                        };
+                        return rtdb.ref(`users/${uid}`).set(initialData);
+                    })
+                    .catch(err => {
+                        hideSpinner();
+                        alert("Registration failed: " + err.message);
+                    });
+            }
+        }
+
+        function bootApp() {
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('appContainer').classList.remove('hidden');
+            
+            const profile = db.profile || {};
+            document.getElementById('userAratName').innerText = profile.aratName || 'Unset Arat Name';
+            document.getElementById('userRealName').innerText = profile.fullName || 'Operator';
+
+            generateLowStockReminders();
+            navigateTo(state.activeView);
+        }
+
+        function logOut() {
+            showSpinner();
+            auth.signOut().then(() => {
+                hideSpinner();
+                showAuthScreen();
+            });
+        }
+
+        function showAuthScreen() {
+            document.getElementById('authScreen').classList.remove('hidden');
+            document.getElementById('appContainer').classList.add('hidden');
+        }
+
+        // App View Navigation router
+        function navigateTo(viewId) {
+            state.activeView = viewId;
+            document.querySelectorAll('#appContainer main > div > div').forEach(el => el.classList.add('hidden'));
+            
+            const activeEl = document.getElementById(`view-${viewId}`);
+            if (activeEl) activeEl.classList.remove('hidden');
+
+            document.querySelectorAll('aside nav button').forEach(btn => {
+                btn.classList.remove('bg-slate-800', 'text-white');
+                btn.classList.add('text-slate-400');
+            });
+            const activeBtn = document.getElementById(`nav-${viewId}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-slate-800', 'text-white');
+                activeBtn.classList.remove('text-slate-400');
+            }
+
+            document.getElementById('viewTitle').innerText = formatViewTitle(viewId);
+            
+            if (window.innerWidth < 768 && isSidebarMobileOpen) {
+                toggleSidebarMobile();
+            }
+
+            if (viewId === 'dashboard') {
+                renderDashboard();
+            } else if (viewId === 'fish') {
+                renderFishMaster();
+            } else if (viewId === 'purchases') {
+                renderPurchases();
+            } else if (viewId === 'sales') {
+                renderSales();
+            } else if (viewId === 'inventory') {
+                renderInventory();
+            } else if (viewId === 'contacts') {
+                renderContacts();
+            } else if (viewId === 'expenses') {
+                renderExpenses();
+            } else if (viewId === 'reports') {
+                updateReportData();
+            }
+        }
+
+        function formatViewTitle(viewId) {
+            switch(viewId) {
+                case 'dashboard': return 'Dashboard Overview';
+                case 'fish': return 'Fish Master Catalog';
+                case 'purchases': return 'Purchase Ledger Logs';
+                case 'sales': return 'Customer Sales Log';
+                case 'inventory': return 'Real-Time Inventory Status';
+                case 'contacts': return 'Supplier & Customer Registry';
+                case 'expenses': return 'Operating Expenditure Journal';
+                case 'reports': return 'Financial Statements & Audits';
+                case 'settings': return 'Arat Identity Settings';
+                default: return 'Management Suite';
+            }
+        }
+
+        // ==================== UI RENDERING ENGINES ====================
+
+        function renderDashboard() {
+            const purchases = Object.values(db.purchases || {});
+            const sales = Object.values(db.sales || {});
+            const fish = Object.values(db.fish || {});
+            const expenses = Object.values(db.expenses || {});
+
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            const todayPurchaseSum = purchases.filter(p => p.date === todayStr).reduce((sum, p) => sum + p.grandTotal, 0);
+            const todaySalesSum = sales.filter(s => s.date === todayStr).reduce((sum, s) => sum + s.totalSale, 0);
+            const todayProfitSum = sales.filter(s => s.date === todayStr).reduce((sum, s) => sum + s.totalProfit, 0);
+
+            let currentStockKg = fish.reduce((sum, f) => sum + (f.currentStock || 0), 0);
+
+            const totalDueFromBuyers = Object.values(db.buyers || {}).reduce((sum, b) => sum + (b.dueAmount || 0), 0);
+            const totalPayableToSuppliers = Object.values(db.suppliers || {}).reduce((sum, s) => sum + (s.dueAmount || 0), 0);
+
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+
+            const monthProfitSum = sales.filter(s => {
+                const sDate = new Date(s.date);
+                return sDate.getMonth() === currentMonth && sDate.getFullYear() === currentYear;
+            }).reduce((sum, s) => sum + s.totalProfit, 0);
+
+            const yearProfitSum = sales.filter(s => {
+                return new Date(s.date).getFullYear() === currentYear;
+            }).reduce((sum, s) => sum + s.totalProfit, 0);
+
+            document.getElementById('statTodayPurchase').innerText = `₹${todayPurchaseSum.toFixed(2)}`;
+            document.getElementById('statTodaySales').innerText = `₹${todaySalesSum.toFixed(2)}`;
+            document.getElementById('statTodayProfit').innerText = `₹${todayProfitSum.toFixed(2)}`;
+            document.getElementById('statCurrentStock').innerText = `${currentStockKg.toFixed(1)} Kg`;
+            document.getElementById('statTotalDue').innerText = `₹${totalDueFromBuyers.toFixed(2)}`;
+            document.getElementById('statTotalPayable').innerText = `₹${totalPayableToSuppliers.toFixed(2)}`;
+            document.getElementById('statMonthProfit').innerText = `₹${monthProfitSum.toFixed(2)}`;
+            document.getElementById('statYearProfit').innerText = `₹${yearProfitSum.toFixed(2)}`;
+
+            const recentSalesBody = document.getElementById('dashRecentSales');
+            recentSalesBody.innerHTML = '';
+            sales.slice(-5).reverse().forEach(s => {
+                recentSalesBody.innerHTML += `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-1.5 font-bold">${s.invoiceNo}</td>
+                        <td class="p-1.5">${s.buyerName}</td>
+                        <td class="p-1.5 text-right">₹${s.totalSale.toFixed(2)}</td>
+                        <td class="p-1.5 text-right text-emerald-500 font-bold">₹${s.totalProfit.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+
+            const recentPurBody = document.getElementById('dashRecentPurchases');
+            recentPurBody.innerHTML = '';
+            purchases.slice(-5).reverse().forEach(p => {
+                recentPurBody.innerHTML += `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-1.5 font-bold">${p.invoiceNo}</td>
+                        <td class="p-1.5">${p.supplierName}</td>
+                        <td class="p-1.5 text-right">₹${p.grandTotal.toFixed(2)}</td>
+                        <td class="p-1.5"><span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${p.paymentStatus === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${p.paymentStatus}</span></td>
+                    </tr>
+                `;
+            });
+
+            renderDashboardCharts(sales, purchases);
+        }
+
+        function renderDashboardCharts(sales, purchases) {
+            const ctx1 = document.getElementById('dashboardChart').getContext('2d');
+            const ctx2 = document.getElementById('stockDistributionChart').getContext('2d');
+
+            if (dashboardChartInstance) dashboardChartInstance.destroy();
+            if (stockChartInstance) stockChartInstance.destroy();
+
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const salesMonthly = Array(12).fill(0);
+            const profitMonthly = Array(12).fill(0);
+
+            sales.forEach(s => {
+                const m = new Date(s.date).getMonth();
+                salesMonthly[m] += s.totalSale;
+                profitMonthly[m] += s.totalProfit;
+            });
+
+            dashboardChartInstance = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: months,
+                    datasets: [
+                        { label: 'Sales Revenue', data: salesMonthly, backgroundColor: '#0ea5e9' },
+                        { label: 'Net Profits', data: profitMonthly, backgroundColor: '#22c55e' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+
+            const fishes = Object.values(db.fish || {});
+            const fishLabels = fishes.map(f => f.name);
+            const fishStocks = fishes.map(f => f.currentStock || 0);
+
+            stockChartInstance = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: fishLabels,
+                    datasets: [{
+                        data: fishStocks,
+                        backgroundColor: ['#22c55e', '#0ea5e9', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // Updated Render Engine with Dynamic strictly forced 2 columns and rounded images
+        function renderFishMaster() {
+            const grid = document.getElementById('fishListGrid');
+            grid.innerHTML = '';
+            const fishes = Object.values(db.fish || {});
+
+            if(fishes.length === 0) {
+                grid.innerHTML = `<p class="text-xs text-slate-400 col-span-full text-center py-8">No fish species registered yet.</p>`;
+                return;
+            }
+
+            fishes.forEach(f => {
+                const imgString = f.image || "";
+                const imageHtml = imgString 
+                    ? `<img src="${imgString}" class="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-black flex-shrink-0 cursor-pointer hover:opacity-80 transition animate-none" onclick="openImageViewer('${imgString}', event)" alt="${f.name}">`
+                    : `<div class="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-600 flex items-center justify-center border-2 border-black flex-shrink-0">
+                         <i data-lucide="image" class="w-6 h-6 sm:w-8 sm:h-8 text-white"></i>
+                       </div>`;
+
+                grid.innerHTML += `
+                    <div class="bg-white dark:bg-slate-800 p-3 rounded-none border border-black dark:border-white shadow-sm flex flex-col justify-between space-y-3 cursor-pointer hover:shadow transition" onclick="openEditFishModal('${f.id}')" data-name="${f.name}" data-category="${f.category}" data-rate="${f.averagePurchasePrice || 0}">
+                        <!-- Top section containing rounded avatar and explicit texts -->
+                        <div class="flex items-center gap-2 sm:gap-3">
+                            ${imageHtml}
+                            <div class="min-w-0">
+                                <span class="inline-block text-[9px] sm:text-[10px] font-black uppercase px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-black dark:text-white border border-black mb-1">${f.category}</span>
+                                <h4 class="font-extrabold text-black dark:text-white text-xs sm:text-base tracking-tight leading-tight truncate uppercase" title="${f.name}">${f.name}</h4>
+                                <span class="text-[9px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 block mt-0.5">Scale: ${f.unit}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Stats section with explicit black styling -->
+                        <div class="grid grid-cols-2 gap-1.5 text-xs border-t border-black dark:border-white pt-2">
+                            <div class="bg-slate-100 dark:bg-slate-700 p-1 sm:p-1.5 rounded border border-black text-center">
+                                <span class="text-slate-600 dark:text-slate-300 block text-[8px] sm:text-[9px] font-black uppercase tracking-wider">Avg Cost</span>
+                                <span class="font-black text-black dark:text-white text-xs sm:text-sm">₹${(f.averagePurchasePrice || 0).toFixed(0)}</span>
+                            </div>
+                            <div class="bg-emerald-100 dark:bg-emerald-950/40 p-1 sm:p-1.5 rounded border border-black text-center">
+                                <span class="text-emerald-800 dark:text-emerald-300 block text-[8px] sm:text-[9px] font-black uppercase tracking-wider">Stock</span>
+                                <span class="font-black text-emerald-950 dark:text-emerald-300 text-xs sm:text-sm">${(f.currentStock || 0).toFixed(0)} ${f.unit}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        // Real-time catalog UI filters on Search / Category / Rate
+        function filterFishCatalog() {
+            const q = document.getElementById('fishSearchInput').value.toLowerCase();
+            const cat = document.getElementById('fishCategoryFilter').value;
+            const rateRange = document.getElementById('fishRateFilter').value;
+            const cards = document.querySelectorAll('#fishListGrid > div');
+
+            cards.forEach(card => {
+                const name = card.getAttribute('data-name').toLowerCase();
+                const category = card.getAttribute('data-category');
+                const rate = parseFloat(card.getAttribute('data-rate')) || 0;
+
+                const matchQuery = name.includes(q);
+                const matchCategory = !cat || category === cat;
+                
+                let matchRate = true;
+                if (rateRange === 'under200') matchRate = rate < 200;
+                else if (rateRange === '200-500') matchRate = rate >= 200 && rate <= 500;
+                else if (rateRange === 'above500') matchRate = rate > 500;
+
+                if (matchQuery && matchCategory && matchRate) {
+                    card.classList.remove('hidden');
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+        }
+
+        function renderPurchases() {
+            const tbody = document.getElementById('purchasesTableBody');
+            tbody.innerHTML = '';
+            const purchases = Object.values(db.purchases || {});
+
+            purchases.slice().reverse().forEach(p => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                        <td class="p-3 font-bold text-slate-950 dark:text-white">${p.invoiceNo}</td>
+                        <td class="p-3 text-[10px]">${p.date}</td>
+                        <td class="p-3 text-[11px]">
+                            <span class="font-semibold block text-slate-800 dark:text-white">${p.supplierName}</span>
+                            <span class="text-slate-400 text-[10px]">${p.fishName} (${p.quantityKg} Kg)</span>
+                        </td>
+                        <td class="p-3 text-[10px] text-slate-400">₹${p.transportCost + p.iceCost + p.labourCost + p.otherCost}</td>
+                        <td class="p-3 text-right font-bold">₹${p.grandTotal.toFixed(2)}</td>
+                        <td class="p-3 text-right text-red-500 font-semibold">₹${p.dueAmount.toFixed(2)}</td>
+                        <td class="p-3">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${p.paymentStatus === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${p.paymentStatus}</span>
+                        </td>
+                        <td class="p-3 text-center">
+                            <button onclick="viewVoucher('purchase', '${p.id}')" class="text-primary-600 hover:text-primary-800 font-bold text-[10px]">Receipt</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderSales() {
+            const tbody = document.getElementById('salesTableBody');
+            tbody.innerHTML = '';
+            const sales = Object.values(db.sales || {});
+
+            sales.slice().reverse().forEach(s => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                        <td class="p-3 font-bold text-slate-950 dark:text-white">${s.invoiceNo}</td>
+                        <td class="p-3 text-[10px]">${s.date}</td>
+                        <td class="p-3 text-[11px]">
+                            <span class="font-semibold block text-slate-800 dark:text-white">${s.buyerName}</span>
+                            <span class="text-slate-400 text-[10px]">${s.fishName} (${s.quantityKg} Kg)</span>
+                        </td>
+                        <td class="p-3 text-right font-bold">₹${s.totalSale.toFixed(2)}</td>
+                        <td class="p-3 text-right text-[10px] text-slate-400">₹${s.transportCost + s.otherCost}</td>
+                        <td class="p-3 text-right text-emerald-500 font-bold">₹${s.totalProfit.toFixed(2)}</td>
+                        <td class="p-3 text-right text-amber-500 font-bold">₹${s.dueAmount.toFixed(2)}</td>
+                        <td class="p-3 text-center">
+                            <button onclick="viewVoucher('sale', '${s.id}')" class="text-secondary-600 hover:text-secondary-800 font-bold text-[10px]">Receipt</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderInventory() {
+            const tbody = document.getElementById('inventoryTableBody');
+            tbody.innerHTML = '';
+            const fishes = Object.values(db.fish || {});
+
+            fishes.forEach(f => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                        <td class="p-3 font-bold text-slate-800 dark:text-white">${f.name}</td>
+                        <td class="p-3 text-slate-400 text-[10px]">${f.category}</td>
+                        <td class="p-3">${(f.totalPurchasedKg || 0).toFixed(1)} ${f.unit}</td>
+                        <td class="p-3">${(f.totalSoldKg || 0).toFixed(1)} ${f.unit}</td>
+                        <td class="p-3 text-center font-extrabold ${f.currentStock < 50 ? 'text-red-500 bg-red-50/50 dark:bg-red-950/20' : 'text-primary-600'}">${(f.currentStock || 0).toFixed(1)} ${f.unit}</td>
+                        <td class="p-3 text-right font-medium">₹${(f.averagePurchasePrice || 0).toFixed(1)}</td>
+                        <td class="p-3 text-right font-bold text-green-600">₹${(f.totalProfit || 0).toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderContacts() {
+            const supBody = document.getElementById('suppliersTableBody');
+            supBody.innerHTML = '';
+            Object.values(db.suppliers || {}).forEach(s => {
+                supBody.innerHTML += `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-2 text-[11px]">
+                            <span class="font-bold block">${s.name}</span>
+                            <span class="text-slate-400 text-[9px]">${s.phone}</span>
+                        </td>
+                        <td class="p-2 text-[10px]">${s.aratName}</td>
+                        <td class="p-2 text-right">₹${s.totalPurchase.toFixed(1)}</td>
+                        <td class="p-2 text-right text-red-500 font-bold">₹${s.dueAmount.toFixed(1)}</td>
+                    </tr>
+                `;
+            });
+
+            const buyBody = document.getElementById('buyersTableBody');
+            buyBody.innerHTML = '';
+            Object.values(db.buyers || {}).forEach(b => {
+                buyBody.innerHTML += `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="p-2 text-[11px]">
+                            <span class="font-bold block">${b.name}</span>
+                            <span class="text-slate-400 text-[9px]">${b.phone}</span>
+                        </td>
+                        <td class="p-2 text-[10px]">${b.market}</td>
+                        <td class="p-2 text-right">₹${b.totalPurchase.toFixed(1)}</td>
+                        <td class="p-2 text-right text-amber-500 font-bold font-semibold">₹${b.dueAmount.toFixed(1)}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderExpenses() {
+            const tbody = document.getElementById('expensesTableBody');
+            tbody.innerHTML = '';
+            const exp = Object.values(db.expenses || {});
+
+            exp.slice().reverse().forEach(e => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                        <td class="p-3 text-[10px]">${e.date}</td>
+                        <td class="p-3 font-semibold text-slate-800 dark:text-slate-300 text-[11px]">${e.category}</td>
+                        <td class="p-3 text-[10px] text-slate-400 max-w-xs truncate">${e.description}</td>
+                        <td class="p-3 text-right font-bold text-red-500">₹${e.amount.toFixed(2)}</td>
+                        <td class="p-3 text-center">
+                            <button onclick="handleDeleteExpense('${e.id}')" class="text-red-400 hover:text-red-600"><i data-lucide="trash" class="w-3.5 h-3.5 mx-auto"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        // ==================== OPERATIONAL DATA SUBMISSIONS ====================
+
+        function setupPurchaseFormOptions() {
+            const suppSelect = document.getElementById('purSupplierId');
+            const fishSelect = document.getElementById('purFishId');
+
+            suppSelect.innerHTML = '';
+            Object.values(db.suppliers || {}).forEach(s => {
+                suppSelect.innerHTML += `<option value="${s.id}">${s.name} (${s.aratName})</option>`;
+            });
+
+            fishSelect.innerHTML = '';
+            Object.values(db.fish || {}).forEach(f => {
+                fishSelect.innerHTML += `<option value="${f.id}">${f.name}</option>`;
+            });
+
+            document.getElementById('purDate').value = new Date().toISOString().split('T')[0];
+        }
+
+        function setupSalesFormOptions() {
+            const buyerSelect = document.getElementById('saleBuyerId');
+            const fishSelect = document.getElementById('saleFishId');
+
+            buyerSelect.innerHTML = '';
+            Object.values(db.buyers || {}).forEach(b => {
+                buyerSelect.innerHTML += `<option value="${b.id}">${b.name} (${b.market})</option>`;
+            });
+
+            fishSelect.innerHTML = '';
+            Object.values(db.fish || {}).forEach(f => {
+                fishSelect.innerHTML += `<option value="${f.id}">${f.name} (Stock: ${(f.currentStock || 0).toFixed(1)} ${f.unit})</option>`;
+            });
+
+            document.getElementById('saleDate').value = new Date().toISOString().split('T')[0];
+            updateSalePricePlaceholder();
+        }
+
+        function updateSalePricePlaceholder() {
+            const fishId = document.getElementById('saleFishId').value;
+            const f = db.fish[fishId];
+            if(f) {
+                document.getElementById('salePrice').placeholder = `Avg Purchase: ₹${(f.averagePurchasePrice || 0).toFixed(0)}`;
+            }
+        }
+
+        // Populates fields on Modal and flips operational state to "Edit" 
+        function openEditFishModal(id) {
+            const f = db.fish[id];
+            if(!f) return;
+
+            document.getElementById('fishModalTitle').innerText = "Edit Fish Profile & Configuration";
+            document.getElementById('editFishId').value = f.id;
+            document.getElementById('fishName').value = f.name;
+            document.getElementById('fishCategory').value = f.category;
+            document.getElementById('fishUnit').value = f.unit;
+            document.getElementById('fishNote').value = f.note || "";
+            document.getElementById('fishModalSubmitBtn').innerText = "Update Profile";
+            
+            document.getElementById('fishModalDeleteBtn').classList.remove('hidden');
+
+            const previewContainer = document.getElementById('fishImagePreviewContainer');
+            const previewImg = document.getElementById('fishImagePreview');
+            if (f.image) {
+                previewImg.src = f.image;
+                previewContainer.classList.remove('hidden');
+            } else {
+                previewContainer.classList.add('hidden');
+            }
+
+            openModal('addFishModal');
+        }
+
+        // Standard modal opening resets to default Add configuration
+        function openAddFishModal() {
+            document.getElementById('fishModalTitle').innerText = "Add New Fish Item";
+            document.getElementById('editFishId').value = "";
+            document.getElementById('fishForm').reset();
+            document.getElementById('fishModalSubmitBtn').innerText = "Register Profile";
+            document.getElementById('fishModalDeleteBtn').classList.add('hidden');
+            document.getElementById('fishImagePreviewContainer').classList.add('hidden');
+            openModal('addFishModal');
+        }
+
+        // Custom action overrides openModal button inside HTML dynamically 
+        const addCatalogBtn = document.querySelector('button[onclick="openModal(\'addFishModal\')"]');
+        if (addCatalogBtn) {
+            addCatalogBtn.setAttribute('onclick', 'openAddFishModal()');
+        }
+
+        // Form handler handles both Update and Insert asynchronously
+        function handlePostFish(e) {
+            e.preventDefault();
+            const editId = document.getElementById('editFishId').value;
+            const name = document.getElementById('fishName').value;
+            const category = document.getElementById('fishCategory').value;
+            const unit = document.getElementById('fishUnit').value;
+            const note = document.getElementById('fishNote').value;
+            const fileInput = document.getElementById('fishImageInput');
+
+            const saveFishData = (base64Image) => {
+                if (editId) {
+                    const target = db.fish[editId];
+                    target.name = name;
+                    target.category = category;
+                    target.unit = unit;
+                    target.note = note;
+                    if(base64Image) target.image = base64Image;
+                } else {
+                    const id = 'f_' + Date.now();
+                    db.fish[id] = {
+                        id, name, category, unit, note,
+                        image: base64Image || "",
+                        currentStock: 0, averagePurchasePrice: 0, totalPurchasedKg: 0, totalSoldKg: 0, totalProfit: 0
+                    };
+                }
+
+                saveToFirebase();
+                closeModal('addFishModal');
+                document.getElementById('fishForm').reset();
+                document.getElementById('fishImagePreviewContainer').classList.add('hidden');
+            };
+
+            if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    saveFishData(event.target.result);
+                };
+                reader.readAsDataURL(fileInput.files[0]);
+            } else {
+                saveFishData("");
+            }
+        }
+
+        // Delete catalog profile wrapper
+        function handleDeleteFish() {
+            const id = document.getElementById('editFishId').value;
+            if (!id) return;
+
+            const f = db.fish[id];
+            if (!f) return;
+
+            if (f.currentStock > 0) {
+                alert(`Cannot delete profile. ${f.name} currently holds outstanding stock: ${f.currentStock} ${f.unit}`);
+                return;
+            }
+
+            if (confirm(`Confirm deletion of ${f.name} from catalog records?`)) {
+                delete db.fish[id];
+                saveToFirebase();
+                closeModal('addFishModal');
+            }
+        }
+
+        function recalcPurchaseTotals() {
+            const qty = parseFloat(document.getElementById('purQty').value) || 0;
+            const price = parseFloat(document.getElementById('purPrice').value) || 0;
+            const transport = parseFloat(document.getElementById('purCostTransport').value) || 0;
+            const ice = parseFloat(document.getElementById('purCostIce').value) || 0;
+            const labour = parseFloat(document.getElementById('purCostLabour').value) || 0;
+            const other = parseFloat(document.getElementById('purCostOther').value) || 0;
+            const paid = parseFloat(document.getElementById('purPaidAmount').value) || 0;
+
+            const base = qty * price;
+            const grandTotal = base + transport + ice + labour + other;
+            const due = Math.max(0, grandTotal - paid);
+
+            document.getElementById('purLabelGrandTotal').innerText = `₹${grandTotal.toFixed(2)}`;
+            document.getElementById('purLabelDue').innerText = `₹${due.toFixed(2)}`;
+        }
+
+        function handlePostPurchase(e) {
+            e.preventDefault();
+            const id = 'p_' + Date.now();
+            
+            const date = document.getElementById('purDate').value;
+            const supplierId = document.getElementById('purSupplierId').value;
+            const fishId = document.getElementById('purFishId').value;
+            const quantityKg = parseFloat(document.getElementById('purQty').value);
+            const purchasePrice = parseFloat(document.getElementById('purPrice').value);
+            const transportCost = parseFloat(document.getElementById('purCostTransport').value) || 0;
+            const iceCost = parseFloat(document.getElementById('purCostIce').value) || 0;
+            const labourCost = parseFloat(document.getElementById('purCostLabour').value) || 0;
+            const otherCost = parseFloat(document.getElementById('purCostOther').value) || 0;
+            const paidAmount = parseFloat(document.getElementById('purPaidAmount').value) || 0;
+            const note = document.getElementById('purNote').value;
+
+            const baseCost = quantityKg * purchasePrice;
+            const grandTotal = baseCost + transportCost + iceCost + labourCost + otherCost;
+            const dueAmount = grandTotal - paidAmount;
+            const paymentStatus = dueAmount <= 0 ? 'Paid' : 'Partial';
+
+            const supplier = db.suppliers[supplierId];
+            const fish = db.fish[fishId];
+
+            if (!supplier || !fish) {
+                alert("Ensure Supplier and Fish options are registered first.");
+                return;
+            }
+
+            const invoiceNo = `PUR-${1000 + Object.keys(db.purchases || {}).length + 1}`;
+
+            const record = {
+                id, invoiceNo, supplierId, supplierName: supplier.name, date,
+                fishId, fishName: fish.name, quantityKg, purchasePrice,
+                transportCost, iceCost, labourCost, otherCost,
+                grandTotal, paidAmount, dueAmount, paymentStatus, note
+            };
+
+            db.purchases[id] = record;
+
+            supplier.totalPurchase = (supplier.totalPurchase || 0) + grandTotal;
+            supplier.paidAmount = (supplier.paidAmount || 0) + paidAmount;
+            supplier.dueAmount = (supplier.dueAmount || 0) + dueAmount;
+
+            const prevTotalCost = (fish.totalPurchasedKg || 0) * (fish.averagePurchasePrice || 0);
+            const newTotalCost = prevTotalCost + baseCost;
+            fish.totalPurchasedKg = (fish.totalPurchasedKg || 0) + quantityKg;
+            fish.currentStock = (fish.currentStock || 0) + quantityKg;
+            if(fish.totalPurchasedKg > 0) {
+                fish.averagePurchasePrice = newTotalCost / fish.totalPurchasedKg;
+            }
+
+            saveToFirebase();
+            closeModal('addPurchaseModal');
+            document.getElementById('purchaseForm').reset();
+        }
+
+        function recalcSalesTotals() {
+            const qty = parseFloat(document.getElementById('saleQty').value) || 0;
+            const price = parseFloat(document.getElementById('salePrice').value) || 0;
+            const transport = parseFloat(document.getElementById('saleCostTransport').value) || 0;
+            const other = parseFloat(document.getElementById('saleCostOther').value) || 0;
+            const paid = parseFloat(document.getElementById('salePaidAmount').value) || 0;
+
+            const baseSale = qty * price;
+            const due = Math.max(0, baseSale - paid);
+
+            document.getElementById('saleLabelGrandTotal').innerText = `₹${baseSale.toFixed(2)}`;
+            document.getElementById('saleLabelDue').innerText = `₹${due.toFixed(2)}`;
+        }
+
+        function handlePostSale(e) {
+            e.preventDefault();
+            const id = 'sa_' + Date.now();
+
+            const date = document.getElementById('saleDate').value;
+            const buyerId = document.getElementById('saleBuyerId').value;
+            const fishId = document.getElementById('saleFishId').value;
+            const quantityKg = parseFloat(document.getElementById('saleQty').value);
+            const sellingPrice = parseFloat(document.getElementById('salePrice').value);
+            const transportCost = parseFloat(document.getElementById('saleCostTransport').value) || 0;
+            const otherCost = parseFloat(document.getElementById('saleCostOther').value) || 0;
+            const paidAmount = parseFloat(document.getElementById('salePaidAmount').value) || 0;
+
+            const fish = db.fish[fishId];
+            if (!fish || (fish.currentStock || 0) < quantityKg) {
+                alert(`Insufficient stock level. Available is only ${(fish ? fish.currentStock : 0)} Kg`);
+                return;
+            }
+
+            const totalSale = quantityKg * sellingPrice;
+            const dueAmount = totalSale - paidAmount;
+            const paymentStatus = dueAmount <= 0 ? 'Paid' : 'Partial';
+
+            const costBasis = quantityKg * (fish.averagePurchasePrice || 0);
+            const operatingCost = transportCost + otherCost;
+            const totalProfit = totalSale - costBasis - operatingCost;
+
+            const buyer = db.buyers[buyerId];
+            if (!buyer) {
+                alert("Ensure the Selected Buyer Profile exists.");
+                return;
+            }
+
+            const invoiceNo = `SAL-${1000 + Object.keys(db.sales || {}).length + 1}`;
+
+            const record = {
+                id, invoiceNo, buyerId, buyerName: buyer.name, date,
+                fishId, fishName: fish.name, quantityKg, sellingPrice,
+                transportCost, otherCost, totalSale, totalProfit,
+                paidAmount, dueAmount, paymentStatus
+            };
+
+            db.sales[id] = record;
+
+            buyer.totalPurchase = (buyer.totalPurchase || 0) + totalSale;
+            buyer.paidAmount = (buyer.paidAmount || 0) + paidAmount;
+            buyer.dueAmount = (buyer.dueAmount || 0) + dueAmount;
+
+            fish.currentStock = (fish.currentStock || 0) - quantityKg;
+            fish.totalSoldKg = (fish.totalSoldKg || 0) + quantityKg;
+            fish.totalProfit = (fish.totalProfit || 0) + totalProfit;
+
+            saveToFirebase();
+            closeModal('addSaleModal');
+            document.getElementById('saleForm').reset();
+        }
+
+        function handlePostSupplier(e) {
+            e.preventDefault();
+            const id = 's_' + Date.now();
+            const name = document.getElementById('suppName').value;
+            const aratName = document.getElementById('suppArat').value;
+            const phone = document.getElementById('suppPhone').value;
+            const address = document.getElementById('suppAddress').value;
+
+            db.suppliers[id] = { id, name, aratName, phone, address, totalPurchase: 0, paidAmount: 0, dueAmount: 0 };
+            saveToFirebase();
+            closeModal('addSupplierModal');
+        }
+
+        function handlePostBuyer(e) {
+            e.preventDefault();
+            const id = 'b_' + Date.now();
+            const name = document.getElementById('buyerName').value;
+            const market = document.getElementById('buyerMarket').value;
+            const phone = document.getElementById('buyerPhone').value;
+            const address = document.getElementById('buyerAddress').value;
+
+            db.buyers[id] = { id, name, market, phone, address, totalPurchase: 0, paidAmount: 0, dueAmount: 0 };
+            saveToFirebase();
+            closeModal('addBuyerModal');
+        }
+
+        function handlePostExpense(e) {
+            e.preventDefault();
+            const id = 'e_' + Date.now();
+            const category = document.getElementById('expCategory').value;
+            const amount = parseFloat(document.getElementById('expAmount').value);
+            const description = document.getElementById('expDesc').value;
+            const date = document.getElementById('expDate').value;
+
+            db.expenses[id] = { id, category, amount, description, date };
+            saveToFirebase();
+            document.getElementById('expenseForm').reset();
+        }
+
+        function handleDeleteExpense(id) {
+            if(confirm("Confirm deletion of this expense entry?")) {
+                delete db.expenses[id];
+                saveToFirebase();
+            }
+        }
+
+        // ==================== INVOICING / RECEIPTS SYSTEM ====================
+
+        function viewVoucher(type, id) {
+            const container = document.getElementById('printArea');
+            const user = db.profile || {};
+            let html = '';
+
+            if (type === 'purchase') {
+                const p = db.purchases[id];
+                if (!p) return;
+                html = `
+                    <div class="space-y-4">
+                        <div class="text-center pb-4 border-b border-black">
+                            <h2 class="text-xl font-bold">${user.aratName || 'Padma Fish Trade'}</h2>
+                            <p class="text-xs text-slate-400">${user.address || 'Ghat'} | Phone: ${user.phone || ''}</p>
+                            <h3 class="font-semibold text-sm mt-2 text-primary-600">INWARD PURCHASE RECEIPT</h3>
+                        </div>
+                        <div class="grid grid-cols-2 text-xs">
+                            <div>
+                                <p><strong>Voucher No:</strong> ${p.invoiceNo}</p>
+                                <p><strong>Date:</strong> ${p.date}</p>
+                            </div>
+                            <div class="text-right">
+                                <p><strong>Supplier:</strong> ${p.supplierName}</p>
+                            </div>
+                        </div>
+                        <table class="w-full text-left text-xs border-collapse solid-table">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="p-2">Fish Identity</th>
+                                    <th class="p-2 text-right">Qty</th>
+                                    <th class="p-2 text-right">Cost</th>
+                                    <th class="p-2 text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="p-2">${p.fishName}</td>
+                                    <td class="p-2 text-right">${p.quantityKg} Kg</td>
+                                    <td class="p-2 text-right">₹${p.purchasePrice}</td>
+                                    <td class="p-2 text-right">₹${(p.quantityKg * p.purchasePrice).toFixed(2)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="space-y-1 text-xs border-t pt-3 border-black">
+                            <div class="flex justify-between"><span>Transportation:</span><span>₹${p.transportCost}</span></div>
+                            <div class="flex justify-between"><span>Ice Preservation:</span><span>₹${p.iceCost}</span></div>
+                            <div class="flex justify-between"><span>Labour Fees:</span><span>₹${p.labourCost}</span></div>
+                            <div class="flex justify-between font-bold text-sm border-t pt-2 border-black"><span>Total Spent:</span><span>₹${p.grandTotal.toFixed(2)}</span></div>
+                            <div class="flex justify-between font-semibold text-slate-600"><span>Paid:</span><span>₹${p.paidAmount.toFixed(2)}</span></div>
+                            <div class="flex justify-between text-red-600 font-bold"><span>Balance Due:</span><span>₹${p.dueAmount.toFixed(2)}</span></div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                const s = db.sales[id];
+                if (!s) return;
+                html = `
+                    <div class="space-y-4">
+                        <div class="text-center pb-4 border-b border-black">
+                            <h2 class="text-xl font-bold">${user.aratName || 'Padma Fish Trade'}</h2>
+                            <p class="text-xs text-slate-400">${user.address || 'Ghat'} | Phone: ${user.phone || ''}</p>
+                            <h3 class="font-semibold text-sm mt-2 text-secondary-600">CUSTOMER SALES INVOICE</h3>
+                        </div>
+                        <div class="grid grid-cols-2 text-xs">
+                            <div>
+                                <p><strong>Invoice No:</strong> ${s.invoiceNo}</p>
+                                <p><strong>Date:</strong> ${s.date}</p>
+                            </div>
+                            <div class="text-right">
+                                <p><strong>Buyer:</strong> ${s.buyerName}</p>
+                            </div>
+                        </div>
+                        <table class="w-full text-left text-xs border-collapse solid-table">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="p-2">Fish Breed</th>
+                                    <th class="p-2 text-right">Qty</th>
+                                    <th class="p-2 text-right">Selling Rate</th>
+                                    <th class="p-2 text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="p-2">${s.fishName}</td>
+                                    <td class="p-2 text-right">${s.quantityKg} Kg</td>
+                                    <td class="p-2 text-right">₹${s.sellingPrice}</td>
+                                    <td class="p-2 text-right">₹${(s.quantityKg * s.sellingPrice).toFixed(2)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="space-y-1 text-xs border-t pt-3 border-black font-semibold">
+                            <div class="flex justify-between font-bold text-sm"><span>Total Bill:</span><span>₹${s.totalSale.toFixed(2)}</span></div>
+                            <div class="flex justify-between text-emerald-600"><span>Collected:</span><span>₹${s.paidAmount.toFixed(2)}</span></div>
+                            <div class="flex justify-between text-amber-600"><span>Remaining Due:</span><span>₹${s.dueAmount.toFixed(2)}</span></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+            openModal('invoiceDetailModal');
+        }
+
+        function handleSaveSettings(e) {
+            e.preventDefault();
+            db.profile.aratName = document.getElementById('setAratName').value;
+            db.profile.fullName = document.getElementById('setOpName').value;
+            db.profile.address = document.getElementById('setAddress').value;
+
+            saveToFirebase();
+            alert("Settings profile saved.");
+        }
+
+        // ==================== REPORTING STATEMENTS ====================
+
+        function updateReportData() {
+            const timeframe = document.getElementById('reportTimeframe').value;
+            const category = document.getElementById('reportCategory').value;
+
+            const sales = Object.values(db.sales || {});
+            const purchases = Object.values(db.purchases || {});
+            const expenses = Object.values(db.expenses || {});
+
+            const header = document.getElementById('reportTableHeader');
+            const tbody = document.getElementById('reportTableBody');
+
+            tbody.innerHTML = '';
+
+            let cutoffDate = new Date();
+            if (timeframe === 'daily') cutoffDate.setHours(0,0,0,0);
+            else if (timeframe === 'weekly') cutoffDate.setDate(cutoffDate.getDate() - 7);
+            else if (timeframe === 'monthly') cutoffDate.setDate(cutoffDate.getDate() - 30);
+            else if (timeframe === 'yearly') cutoffDate.setMonth(0, 1);
+
+            const filteredSales = sales.filter(s => new Date(s.date) >= cutoffDate);
+            const filteredPurchases = purchases.filter(p => new Date(p.date) >= cutoffDate);
+            const filteredExpenses = expenses.filter(e => new Date(e.date) >= cutoffDate);
+
+            if (category === 'all' || category === 'fish-wise') {
+                header.innerHTML = `
+                    <tr>
+                        <th class="p-3">Reference No</th>
+                        <th class="p-3">Date</th>
+                        <th class="p-3">Details</th>
+                        <th class="p-3 text-right">Debit (In)</th>
+                        <th class="p-3 text-right">Credit (Out)</th>
+                        <th class="p-3 text-right">Revenue (Profit)</th>
+                    </tr>
+                `;
+
+                filteredSales.forEach(s => {
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                            <td class="p-3 font-bold">${s.invoiceNo}</td>
+                            <td class="p-3">${s.date}</td>
+                            <td class="p-3">Sale: ${s.fishName} to ${s.buyerName}</td>
+                            <td class="p-3 text-right text-slate-400">-</td>
+                            <td class="p-3 text-right">₹${s.totalSale.toFixed(1)}</td>
+                            <td class="p-3 text-right text-green-600 font-bold">₹${s.totalProfit.toFixed(1)}</td>
+                        </tr>
+                    `;
+                });
+
+                if (category !== 'fish-wise') {
+                    filteredPurchases.forEach(p => {
+                        tbody.innerHTML += `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                <td class="p-3 font-bold">${p.invoiceNo}</td>
+                                <td class="p-3">${p.date}</td>
+                                <td class="p-3">Purchase: ${p.fishName} from ${p.supplierName}</td>
+                                <td class="p-3 text-right">₹${p.grandTotal.toFixed(1)}</td>
+                                <td class="p-3 text-right text-slate-400">-</td>
+                                <td class="p-3 text-right text-slate-400">-</td>
+                            </tr>
+                        `;
+                    });
+                }
+            } else if (category === 'due-reports') {
+                header.innerHTML = `
+                    <tr>
+                        <th class="p-3">Name</th>
+                        <th class="p-3">Role Type</th>
+                        <th class="p-3">Phone</th>
+                        <th class="p-3 text-right">Outstanding Credit Balance</th>
+                    </tr>
+                `;
+
+                Object.values(db.buyers || {}).forEach(b => {
+                    if (b.dueAmount > 0) {
+                        tbody.innerHTML += `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                <td class="p-3 font-bold">${b.name}</td>
+                                <td class="p-3"><span class="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded font-bold">Buyer</span></td>
+                                <td class="p-3">${b.phone}</td>
+                                <td class="p-3 text-right text-amber-500 font-bold">₹${b.dueAmount.toFixed(1)}</td>
+                            </tr>
+                        `;
+                    }
+                });
+
+                Object.values(db.suppliers || {}).forEach(s => {
+                    if (s.dueAmount > 0) {
+                        tbody.innerHTML += `
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                <td class="p-3 font-bold">${s.name}</td>
+                                <td class="p-3"><span class="bg-red-100 text-red-800 text-[10px] px-2 py-0.5 rounded font-bold">Supplier</span></td>
+                                <td class="p-3">${s.phone}</td>
+                                <td class="p-3 text-right text-red-500 font-bold">₹${s.dueAmount.toFixed(1)}</td>
+                            </tr>
+                        `;
+                    }
+                });
+            } else if (category === 'expense') {
+                header.innerHTML = `
+                    <tr>
+                        <th class="p-3">Date</th>
+                        <th class="p-3">Category</th>
+                        <th class="p-3">Details</th>
+                        <th class="p-3 text-right">Capital Out</th>
+                    </tr>
+                `;
+
+                filteredExpenses.forEach(e => {
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                            <td class="p-3">${e.date}</td>
+                            <td class="p-3 font-bold">${e.category}</td>
+                            <td class="p-3">${e.description}</td>
+                            <td class="p-3 text-right text-red-500 font-bold">₹${e.amount.toFixed(1)}</td>
+                        </tr>
+                    `;
+                });
+            }
+        }
+
+        function exportToCSV() {
+            const sales = Object.values(db.sales || {});
+            let csvContent = "data:text/csv;charset=utf-8,Invoice No,Date,Details,Amount,Profit\n";
+            
+            sales.forEach(s => {
+                csvContent += `${s.invoiceNo},${s.date},${s.buyerName} - ${s.fishName},${s.totalSale},${s.totalProfit}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `FishTrade_Report_${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // ==================== ALERTS AND LOCAL STORAGE ====================
+
+        function generateLowStockReminders() {
+            state.notifications = [];
+            const fishes = Object.values(db.fish || {});
+            
+            fishes.forEach(f => {
+                if ((f.currentStock || 0) < 50) {
+                    state.notifications.push({
+                        title: 'Critical Stock Level Warning',
+                        message: `${f.name} currently stands below 50 Kg (${(f.currentStock || 0).toFixed(0)} Kg remaining).`,
+                        type: 'alert'
+                    });
+                }
+            });
+
+            const buyers = Object.values(db.buyers || {});
+            buyers.forEach(b => {
+                if((b.dueAmount || 0) > 10000) {
+                    state.notifications.push({
+                        title: 'Outstanding Account Credit Warning',
+                        message: `${b.name} has outstanding due invoices totaling ₹${(b.dueAmount || 0).toFixed(0)}.`,
+                        type: 'due'
+                    });
+                }
+            });
+
+            const badge = document.getElementById('notifBadge');
+            if (state.notifications.length > 0) {
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function toggleNotifications() {
+            const menu = document.getElementById('notifMenu');
+            const list = document.getElementById('notifList');
+            
+            menu.classList.toggle('hidden');
+            list.innerHTML = '';
+
+            if (state.notifications.length === 0) {
+                list.innerHTML = `<p class="p-2 text-center text-slate-400">All inventory counts & ledger claims balanced.</p>`;
+                return;
+            }
+
+            state.notifications.forEach(n => {
+                list.innerHTML += `
+                    <div class="p-2 border-b dark:border-slate-700 space-y-1">
+                        <span class="font-bold text-slate-800 dark:text-slate-200 block">${n.title}</span>
+                        <p class="text-slate-400">${n.message}</p>
+                    </div>
+                `;
+            });
+        }
+
+        function filterPurchases() {
+            const q = document.getElementById('searchPurchaseInput').value.toLowerCase();
+            const date = document.getElementById('purchaseFilterDate').value;
+            const rows = document.querySelectorAll('#purchasesTableBody tr');
+
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                const matchesSearch = text.includes(q);
+                const matchesDate = !date || text.includes(date);
+                row.style.display = (matchesSearch && matchesDate) ? '' : 'none';
+            });
+        }
+
+        // Global filter resets
+        function resetPurchaseFilters() {
+            document.getElementById('searchPurchaseInput').value = '';
+            document.getElementById('purchaseFilterDate').value = '';
+            filterPurchases();
+        }
+
+        function filterSales() {
+            const q = document.getElementById('searchSaleInput').value.toLowerCase();
+            const date = document.getElementById('salesFilterDate').value;
+            const rows = document.querySelectorAll('#salesTableBody tr');
+
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                const matchesSearch = text.includes(q);
+                const matchesDate = !date || text.includes(date);
+                row.style.display = (matchesSearch && matchesDate) ? '' : 'none';
+            });
+        }
+
+        function resetSalesFilters() {
+            document.getElementById('searchSaleInput').value = '';
+            document.getElementById('salesFilterDate').value = '';
+            filterSales();
+        }
+
+        function toggleDarkMode() {
+            state.theme = state.theme === 'light' ? 'dark' : 'light';
+            applyTheme();
+        }
+
+        function applyTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('themeIcon');
+            if (state.theme === 'dark') {
+                html.classList.add('dark');
+                icon.setAttribute('data-lucide', 'sun');
+            } else {
+                html.classList.remove('dark');
+                icon.setAttribute('data-lucide', 'moon');
+            }
+            lucide.createIcons();
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function factoryResetDatabase() {
+            if (confirm("Confirm database clearing? This updates both Cloud & Local storage.")) {
+                db = { profile: {}, fish: {}, suppliers: {}, buyers: {}, purchases: {}, sales: {}, expenses: {} };
+                saveToFirebase();
+            }
+        }
+
+        function seedMockData() {
+            db.fish = {
+                "f1": { id: "f1", name: "Rui Carp", category: "Carp", unit: "Kg", currentStock: 350, averagePurchasePrice: 240, totalPurchasedKg: 500, totalSoldKg: 150, totalProfit: 4500, image: "" },
+                "f2": { id: "f2", name: "Hilsa Shad", category: "Hilsha", unit: "Kg", currentStock: 45, averagePurchasePrice: 1200, totalPurchasedKg: 100, totalSoldKg: 55, totalProfit: 16500, image: "" }
+            };
+            db.suppliers = {
+                "s1": { id: "s1", name: "Anisur Rahman", phone: "01911223344", aratName: "Anis Fisheries", address: "Barishal Terminal", totalPurchase: 120000, paidAmount: 110000, dueAmount: 10000 }
+            };
+            db.buyers = {
+                "b1": { id: "b1", name: "Kalam Traders", phone: "01511223344", market: "Kawran Bazar", address: "Dhaka", totalPurchase: 95000, paidAmount: 80000, dueAmount: 15000 }
+            };
+            saveToFirebase();
+        }
+    </script>
+</body>
+</html>
